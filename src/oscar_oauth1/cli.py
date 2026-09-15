@@ -4,6 +4,7 @@ import argparse
 import json
 import logging
 import sys
+from urllib.parse import urlencode
 
 from . import store
 from .client import OscarOAuth1Client
@@ -34,6 +35,10 @@ def main() -> None:
 
     specialist = sub.add_parser("specialist", help="GET consults/getProfessionalSpecialist")
     specialist.add_argument("--spec-id", type=int, required=True)
+
+    find = sub.add_parser("find-specialist", help="GET professionalSpecialist/search")
+    find.add_argument("--referral-no")
+    find.add_argument("--last-name")
 
     call = sub.add_parser("call", help="sign and send one arbitrary request")
     call.add_argument("path", help="path under the services base, query string included")
@@ -66,12 +71,17 @@ def main() -> None:
         url = f"{settings.services_base}?_wadl"
     elif args.command == "specialist":
         url = f"{settings.services_base}/consults/getProfessionalSpecialist?specId={args.spec_id}"
+    elif args.command == "find-specialist":
+        query = urlencode(
+            {k: v for k, v in (("referralNo", args.referral_no), ("lastName", args.last_name)) if v}
+        )
+        url = f"{settings.services_base}/professionalSpecialist/search?{query}"
     else:
         url = f"{settings.services_base}/{args.path.lstrip('/')}"
 
     with OscarOAuth1Client(settings) as client:
         result = client.call(
-            "GET" if args.command in ("wadl", "specialist") else args.method,
+            "GET" if args.command in ("wadl", "specialist", "find-specialist") else args.method,
             url,
             token.oauth_token,
             token.oauth_token_secret,

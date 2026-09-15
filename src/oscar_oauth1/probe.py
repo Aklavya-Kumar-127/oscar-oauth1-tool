@@ -1,9 +1,11 @@
 """Base path discovery. Run this before debugging a single signature.
 
-  /oscar/ws/services   401 + WWW-Authenticate: OAuth  -> correct, sign it
-  /ws/services         403                            -> Cloudflare, never reached Oscar
-  /kaiemr/ws/services  404                            -> wrong context path (FHIR module)
-  /oscar/ws/rs         401 on every operation         -> wants a session, not OAuth
+  /ws/services         403  -> Cloudflare, never reached Oscar
+  /kaiemr/ws/services  404  -> wrong context path (FHIR module)
+
+The brief predicts 401 + WWW-Authenticate: OAuth on the bare services path. The
+medozai-dev tenant does not do that: the bare path 404s and only the trailing
+slash or ?_wadl answers. So ?_wadl is the liveness check here, not the 401.
 """
 
 from __future__ import annotations
@@ -12,12 +14,19 @@ import httpx
 
 from .config import Settings
 
-CANDIDATES = ("/oscar/ws/services", "/ws/services", "/kaiemr/ws/services", "/oscar/ws/rs")
+CANDIDATES = (
+    "/oscar/ws/services?_wadl",
+    "/oscar/ws/services",
+    "/ws/services",
+    "/kaiemr/ws/services",
+    "/oscar/ws/rs?_wadl",
+)
 
 _MEANING = {
+    200: "reached Oscar; the services layer is live",
     401: "reached Oscar; the 401 is the server asking you to sign",
     403: "Cloudflare challenge — you never reached Oscar",
-    404: "wrong context path",
+    404: "wrong context path, or a bare path this tenant does not route",
     406: "Accept header rejected before auth was evaluated",
 }
 

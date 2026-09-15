@@ -57,8 +57,21 @@ and writes the access token to `OSCAR_TOKEN_FILE`.
 
 ```bash
 uv run oscar-oauth1 specialist --spec-id 5
-uv run oscar-oauth1 wadl         # 272 operations on the reference tenant
+uv run oscar-oauth1 find-specialist --last-name Smith
+uv run oscar-oauth1 wadl
 ```
+
+## The two endpoints, as the WADL declares them
+
+Read off `medozai-dev`'s own WADL, base
+`https://medozai-dev.kai-oscar.com/oscar/ws/services`:
+
+| Ticket | Method | Path | Query parameters |
+|---|---|---|---|
+| Get specialist | `GET` | `/consults/getProfessionalSpecialist` | `specId` (int) |
+| Find specialist | `GET` | `/professionalSpecialist/search` | `referralNo` (string), `lastName` (string) |
+
+Both answer `application/json`.
 
 ## Credentials on disk
 
@@ -92,6 +105,24 @@ only artefact that explains a failure.
 That last point is structural. Any integration on this needs either a long TTL
 agreed with the EMR administrator or an operational plan for re-authorising.
 It cannot be solved in code.
+
+## Observed on medozai-dev, 2026-09-15
+
+The brief predicts `401` + `WWW-Authenticate: OAuth` on the bare services path.
+**This tenant does not do that** — probed unauthenticated:
+
+| Path | Status | Note |
+|---|---|---|
+| `/oscar/ws/services?_wadl` | **200** `application/xml` | 297 operations. Served without auth. |
+| `/oscar/ws/services/` | 200 `text/html` | trailing slash matters |
+| `/oscar/ws/services` | 404 | bare path is not routed; **not** a signing problem |
+| `/oscar/ws/rs?_wadl` | 200 `application/xml` | the second surface |
+| `/ws/services` | 403 | Cloudflare — never reached Oscar |
+| `/kaiemr/ws/services` | 404 | wrong context path |
+| `/oscar/ws/oauth/initiate` | 500 on bare `GET` | expects a signed `POST` |
+
+So on this tenant `?_wadl` returning 200 is the liveness check, not the 401.
+A bare-path 404 here means nothing about your signature.
 
 ## Other observed behaviour
 
