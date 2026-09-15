@@ -46,7 +46,10 @@ def main() -> None:
 
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    settings = load_settings()
+    try:
+        settings = load_settings()
+    except RuntimeError as exc:
+        sys.exit(str(exc))
 
     if args.command == "probe":
         print(json.dumps(probe_base_paths(settings), indent=2))
