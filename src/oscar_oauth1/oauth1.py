@@ -15,7 +15,7 @@ import hmac
 import secrets
 import time
 from dataclasses import dataclass
-from typing import Iterable, NamedTuple, Optional, Sequence
+from typing import Iterable, NamedTuple, Optional
 from urllib.parse import quote, unquote, urlsplit
 
 Param = tuple[str, str]
