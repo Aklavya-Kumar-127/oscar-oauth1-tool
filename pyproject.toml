@@ -8,6 +8,9 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn>=0.30",
     "python-dotenv>=1.0",
+    # FastAPI needs this to read the UI's form posts; the add form is a POST
+    # because it creates a record, so a GET form is not an option.
+    "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]

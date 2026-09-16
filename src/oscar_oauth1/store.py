@@ -2,7 +2,7 @@
 
 OAuth 1.0a returns no expiry: the TTL is set per client in Oscar's admin UI and
 is never sent to us, so the issue time we record is the only expiry signal that
-will ever exist. There is also no refresh token — when it dies, a human walks
+will ever exist. There is also no refresh token: when it dies, a human walks
 the authorisation screen again.
 """
 

@@ -117,7 +117,7 @@ def sign_request(
 ) -> SignedRequest:
     """Sign one request. `url` must be the full URL, query string included.
 
-    A JSON body is never folded into the signature — OAuth 1.0a includes a body
+    A JSON body is never folded into the signature. OAuth 1.0a includes a body
     only when it is application/x-www-form-urlencoded, and every write on
     Oscar's services layer is JSON.
     """

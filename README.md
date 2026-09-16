@@ -16,20 +16,20 @@ different base path, different auth model: FHIR uses an OAuth2 bearer token.
 ## Layout
 
 | Path | Contents |
-|---|---|
+| --- | --- |
 | `src/oscar_oauth1/oauth1.py` | The signing primitives. Pure — no I/O, no framework imports. |
 | `tests/test_oauth1.py` | The acceptance vectors, including RFC 5849 §3.4.1.1. |
 | `src/oscar_oauth1/client.py` | The three legs and a signed-call helper. |
 | `src/oscar_oauth1/server.py` | Local callback server for the browser leg. |
 | `src/oscar_oauth1/probe.py` | Base path discovery. |
-| `src/oscar_oauth1/cli.py` | `probe`, `serve`, `status`, `wadl`, `specialist`, `call`. |
+| `src/oscar_oauth1/cli.py` | `probe`, `serve`, `status`, `wadl`, `specialist`, `find-specialist`, `add-specialist`, `call`. |
 
 ## Setup
 
 ```bash
 uv venv --python 3.12 && uv sync --extra dev
 cp .env.template .env      # then fill in key, secret, host
-uv run pytest -q           # 35 tests, no network
+uv run pytest -q           # 39 tests, no network
 ```
 
 ### Registering the client in Oscar
@@ -37,7 +37,7 @@ uv run pytest -q           # 35 tests, no network
 A human step, in Oscar's admin UI. Register a client named **RASMI** with the
 callback URL below, then paste the generated key and secret into `.env`:
 
-```
+```text
 http://localhost:3000/oauth1/callback
 ```
 
@@ -57,21 +57,44 @@ and writes the access token to `OSCAR_TOKEN_FILE`.
 
 ```bash
 uv run oscar-oauth1 specialist --spec-id 5
-uv run oscar-oauth1 find-specialist --last-name Smith
+uv run oscar-oauth1 find-specialist --referral-no 997121 --last-name Grande-2
+uv run oscar-oauth1 add-specialist --first-name Macha --last-name Flamingo \n    --clinic-name 'Medozai Test Clinic' --phone-number 2010000600
 uv run oscar-oauth1 wadl
 ```
 
-## The two endpoints, as the WADL declares them
+## The endpoints, as the WADL declares them
 
 Read off `medozai-dev`'s own WADL, base
 `https://medozai-dev.kai-oscar.com/oscar/ws/services`:
 
-| Ticket | Method | Path | Query parameters |
-|---|---|---|---|
+| Ticket | Method | Path | Parameters |
+| --- | --- | --- | --- |
 | Get specialist | `GET` | `/consults/getProfessionalSpecialist` | `specId` (int) |
-| Find specialist | `GET` | `/professionalSpecialist/search` | `referralNo` (string), `lastName` (string) |
+| Find specialist | `GET` | `/professionalSpecialist/search` | `referralNo` (string), `lastName` (string) — **both required** |
+| Add specialist | `POST` | `/professionalSpecialist/add` | JSON body, `ProfessionalSpecialistTo1` |
 
 Both answer `application/json`.
+
+`search` returns 400 unless *both* parameters are sent, even though the WADL
+marks neither as required. Either one alone fails, so the CLI requires the pair.
+
+`add` answers with the created record, `id` included — that id is the
+deliverable, so the CLI prints it on its own line. The body is **not** signed;
+OAuth 1.0a folds a body into the base string only when it is form-encoded.
+
+### `streetAddress` must not be empty
+
+`add` rejects an empty `streetAddress` with a bare 400 and the branded OSCAR Pro
+error page. Every other field in MD-1585's sample payload is accepted as given;
+it is the empty string that fails:
+
+```text
+{"firstName":"Macha-5", ..., "streetAddress":""}            -> 400
+{"firstName":"Macha-5", ..., "streetAddress":"Test Clinic"} -> 200, id 12
+```
+
+The WADL marks the field optional, so this is another server-side constraint the
+schema does not express. `--clinic-name` is therefore required by the CLI.
 
 ## Credentials on disk
 
@@ -90,8 +113,10 @@ only artefact that explains a failure.
 
 ## When it returns 401
 
-1. **`Accept` header.** A 406 is evaluated *before* auth and says nothing about
-   signing. `application/fhir+json` and `text/html` both 406 here.
+1. **`Accept` header.** `application/fhir+json` and `text/html` both 406 here.
+   Note the ordering, measured on this tenant: auth runs *first*, so a 406 means
+   your signature was already accepted. Any non-401 status does. The brief says
+   406 is evaluated before auth; that is not true here — see below.
 2. **Base path.** 403 is Cloudflare, 404 is the wrong context path. Run `probe`.
 3. **Print the base string** and confirm the query parameters are in it.
 4. **Signing key ends with `&`** when there is no token secret.
@@ -112,8 +137,8 @@ The brief predicts `401` + `WWW-Authenticate: OAuth` on the bare services path.
 **This tenant does not do that** — probed unauthenticated:
 
 | Path | Status | Note |
-|---|---|---|
-| `/oscar/ws/services?_wadl` | **200** `application/xml` | 297 operations. Served without auth. |
+| --- | --- | --- |
+| `/oscar/ws/services?_wadl` | **200** `application/xml` | 272 operations in 297 resource elements. Served without auth. |
 | `/oscar/ws/services/` | 200 `text/html` | trailing slash matters |
 | `/oscar/ws/services` | 404 | bare path is not routed; **not** a signing problem |
 | `/oscar/ws/rs?_wadl` | 200 `application/xml` | the second surface |
@@ -124,6 +149,16 @@ The brief predicts `401` + `WWW-Authenticate: OAuth` on the bare services path.
 So on this tenant `?_wadl` returning 200 is the liveness check, not the 401.
 A bare-path 404 here means nothing about your signature.
 
+**The 401 challenge is real, just not on the bare path.** Any actual operation
+answers it when unsigned:
+
+```text
+GET /oscar/ws/services/consults/getProfessionalSpecialist?specId=5
+  (no Authorization)  ->  401   WWW-Authenticate: OAuth
+```
+
+So the brief's row is right about the behaviour and wrong about the path.
+
 ## Other observed behaviour
 
 - `OPTIONS` returns 204 with no `Allow` header — method discovery does not work.
@@ -131,6 +166,11 @@ A bare-path 404 here means nothing about your signature.
 - A read for a missing record is 204 on some operations and 404 on others.
   Neither is an auth failure.
 - Malformed requests return a branded HTML error page; the status line is the
-  only signal.
+  only signal. A 400 arrives as an OSCAR Pro support page reading "Call or email
+  OSCAR Pro to get this fixed!", which looks like an outage but is not.
+- Auth is evaluated **before** content negotiation and before request validation.
+  Measured with a deliberately corrupted signature: `Accept: text/html` with a
+  good signature gives 406, with a bad one gives 401. So any status that is not
+  401 tells you the signature was accepted.
 - JSON request bodies are **not** signed. OAuth 1.0a folds a body into the base
   string only when it is `application/x-www-form-urlencoded`.

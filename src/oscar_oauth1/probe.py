@@ -25,7 +25,7 @@ CANDIDATES = (
 _MEANING = {
     200: "reached Oscar; the services layer is live",
     401: "reached Oscar; the 401 is the server asking you to sign",
-    403: "Cloudflare challenge — you never reached Oscar",
+    403: "Cloudflare challenge; you never reached Oscar",
     404: "wrong context path, or a bare path this tenant does not route",
     406: "Accept header rejected before auth was evaluated",
 }

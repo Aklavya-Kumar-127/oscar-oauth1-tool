@@ -35,6 +35,8 @@ class ApiResult:
     text: str
     headers: dict[str, str]
     base_string: str
+    method: str
+    url: str
 
 
 class OscarOAuth1Client:
@@ -63,7 +65,7 @@ class OscarOAuth1Client:
         return signed
 
     def initiate(self) -> TemporaryCredentials:
-        """Leg 1 — temporary credentials, signed with the consumer alone."""
+        """Leg 1: temporary credentials, signed with the consumer alone."""
         url = f"{self.settings.oauth_base}/initiate"
         signed = self._sign("POST", url, callback=self.settings.callback_url)
 
@@ -87,13 +89,13 @@ class OscarOAuth1Client:
         )
 
     def authorize_url(self, temporary_token: str) -> str:
-        """Leg 2 — nothing is signed; this is a handoff to a login screen."""
+        """Leg 2: nothing is signed; this is a handoff to a login screen."""
         return f"{self.settings.oauth_base}/authorize?oauth_token={temporary_token}"
 
     def exchange(
         self, temporary_token: str, temporary_secret: str, verifier: Optional[str]
     ) -> dict[str, str]:
-        """Leg 3 — signed with the temporary token and its secret.
+        """Leg 3: signed with the temporary token and its secret.
 
         `verifier` is omitted entirely when None: an empty string still changes
         the base string.
@@ -128,7 +130,7 @@ class OscarOAuth1Client:
     ) -> ApiResult:
         """One independently signed API call. There is no session.
 
-        A JSON body is sent but never signed — OAuth 1.0a folds a body into the
+        A JSON body is sent but never signed. OAuth 1.0a folds a body into the
         base string only when it is application/x-www-form-urlencoded.
         """
         signed = self._sign(method, url, token=token, token_secret=token_secret)
@@ -140,4 +142,6 @@ class OscarOAuth1Client:
             text=response.text,
             headers=dict(response.headers),
             base_string=signed.base_string,
+            method=method,
+            url=url,
         )
