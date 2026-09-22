@@ -25,6 +25,17 @@ class AccessToken:
     def age_seconds(self) -> float:
         return time.time() - self.issued_at
 
+    def remaining_seconds(self, ttl_seconds: Optional[int]) -> Optional[float]:
+        """Seconds left before `ttl_seconds` lapses, or None when it's not
+        known. Oscar never sends a TTL itself, so this is only ever as good
+        as whatever the caller was told to enter by hand off the client's own
+        admin UI. A negative result means the token is already past it, even
+        though this object still holds it — nothing here calls Oscar to find
+        out."""
+        if ttl_seconds is None:
+            return None
+        return self.issued_at + ttl_seconds - time.time()
+
 
 def save(path: Path, token: str, token_secret: str) -> AccessToken:
     record = AccessToken(token, token_secret, time.time())

@@ -82,7 +82,14 @@ def main() -> None:
         if token is None:
             print(f"No token at {settings.token_file}")
         else:
-            print(f"Token stored, age {token.age_seconds / 3600:.2f} h (no TTL is returned)")
+            print(f"Token stored, age {token.age_seconds / 3600:.2f} h")
+            remaining = token.remaining_seconds(settings.token_ttl_seconds)
+            if remaining is None:
+                print("Expiry unknown (Oscar returns no TTL; set OSCAR_TOKEN_TTL_SECONDS to compute one)")
+            elif remaining <= 0:
+                print(f"Expired {abs(remaining) / 3600:.2f} h ago against the configured TTL — re-authorise")
+            else:
+                print(f"Expires in {remaining / 3600:.2f} h against the configured TTL")
         return
 
     if args.command == "serve":

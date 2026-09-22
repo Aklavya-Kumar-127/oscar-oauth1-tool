@@ -15,7 +15,6 @@ from __future__ import annotations
 import html
 import json
 import logging
-import time
 from datetime import datetime
 from typing import Optional
 
@@ -68,6 +67,8 @@ def _client() -> OscarOAuth1Client:
 
 
 HEAD = """
+<title>Oscar OAuth 1.0a</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='5' y='11' width='14' height='10' rx='2.5' fill='%231f6b4f'/%3E%3Cpath d='M8 11V7a4 4 0 0 1 8 0v4' fill='none' stroke='%231f6b4f' stroke-width='2'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -224,6 +225,8 @@ HEAD = """
             background: var(--raised); display: flex; align-items: center;
             gap: 12px; }
   .auth-h h2 { margin: 0; font-size: 1.05rem; font-weight: 600; }
+  .auth-h .dot { width: 9px; height: 9px; background: var(--ok); }
+  .auth-h .dot.bad { background: var(--bad); }
   .auth-b { padding: 20px 24px 24px; }
   .auth-b p { margin: 0 0 14px; }
   .steps { list-style: none; margin: 0 0 18px; padding: 0;
@@ -244,13 +247,25 @@ HEAD = """
                box-shadow: inset 0 0 0 1px var(--rule2); }
   .cta.ghost:hover { box-shadow: inset 0 0 0 1px var(--accent);
                      background: transparent; }
-  .meta { display: flex; flex-wrap: wrap; gap: 8px 28px; margin: 0 0 16px;
-          padding: 12px 0 0; border-top: 1px solid var(--rule); }
-  .meta div { font-size: 0.8rem; }
+  .meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+          gap: 14px 24px; margin: 0 0 18px;
+          padding: 14px 0 0; border-top: 1px solid var(--rule); }
+  .meta div { font-size: 0.8rem; min-width: 0; }
   .meta dt { font-family: var(--mono); font-size: 0.68rem; color: var(--ink3);
              text-transform: uppercase; letter-spacing: 0.1em; }
-  .meta dd { margin: 2px 0 0; color: var(--ink2); }
-  .meta dd.bad-text { color: var(--bad); }
+  .meta dd { margin: 3px 0 0; color: var(--ink2); word-break: break-word; }
+  .meta dd.bad-text { color: var(--bad); font-weight: 500; }
+  .meta dd code { font-family: var(--mono); font-size: 0.78rem;
+                  background: var(--raised); border: 1px solid var(--rule2);
+                  border-radius: 4px; padding: 1px 5px; }
+
+  /* ---- inline banner ---- */
+  .banner { display: flex; align-items: flex-start; gap: 10px;
+            border-radius: 6px; padding: 11px 14px; margin: 0 0 18px;
+            font-size: 0.85rem; line-height: 1.5; }
+  .banner .dot { margin-top: 6px; flex: none; }
+  .banner.bad  { background: var(--bad-bg);  color: var(--bad); }
+  .banner.warn { background: var(--warn-bg); color: var(--warn); }
 </style>
 """
 
@@ -265,10 +280,8 @@ def _remaining_ttl_hours(settings: Settings, token: AccessToken) -> Optional[flo
     unset and there is nothing to compute from. A negative result means the
     token is past its configured TTL, even though this tool still holds it —
     Oscar answers a 401 for it regardless of what the age display says."""
-    if settings.token_ttl_seconds is None:
-        return None
-    expires_at = token.issued_at + settings.token_ttl_seconds
-    return (expires_at - time.time()) / 3600
+    remaining = token.remaining_seconds(settings.token_ttl_seconds)
+    return None if remaining is None else remaining / 3600
 
 
 _OPERATIONS_NAV = [
@@ -319,24 +332,45 @@ def _shell(
     """
 
 
-def _expiry_dd(settings: Settings, token: AccessToken) -> str:
-    """The 'Expires at' row. Oscar never sends a TTL, so this is only ever as
-    good as OSCAR_TOKEN_TTL_SECONDS, entered by hand from the client's own
+def _expiry_status(settings: Settings, token: AccessToken) -> tuple[str, str, bool]:
+    """The 'Expires at' row plus an optional banner, as (dd_html, banner_html,
+    is_expired). Oscar never sends a TTL, so this is only ever as good as
+    OSCAR_TOKEN_TTL_SECONDS, entered by hand from the client's own
     Administration Panel > Integration screen (see README § When it returns
     401). Unset, there is nothing to compute from, and the row says so rather
     than pretending an age is an expiry."""
     remaining_h = _remaining_ttl_hours(settings, token)
     if remaining_h is None:
-        return (
+        dd = (
             '<dd>Unknown &mdash; set <code>OSCAR_TOKEN_TTL_SECONDS</code> '
             "to compute one</dd>"
         )
+        return dd, "", False
 
     expires_at = token.issued_at + settings.token_ttl_seconds
     when = datetime.fromtimestamp(expires_at).strftime("%Y-%m-%d %H:%M")
+
     if remaining_h <= 0:
-        return f'<dd class="bad-text">{when} &middot; expired {abs(remaining_h):.1f} h ago</dd>'
-    return f'<dd>{when} &middot; in {remaining_h:.1f} h</dd>'
+        dd = f'<dd class="bad-text">{when} &middot; expired {abs(remaining_h):.1f} h ago</dd>'
+        banner = (
+            '<div class="banner bad"><span class="dot"></span>'
+            "<span>This token is past its configured TTL. Oscar will very "
+            "likely answer 401 for every operation below until you "
+            "re-authorise.</span></div>"
+        )
+        return dd, banner, True
+
+    if remaining_h < 1:
+        minutes = remaining_h * 60
+        dd = f"<dd>{when} &middot; in {minutes:.0f} min</dd>"
+        banner = (
+            '<div class="banner warn"><span class="dot"></span>'
+            f"<span>This token expires in under an hour ({minutes:.0f} min). "
+            "Re-authorise soon to avoid an interruption.</span></div>"
+        )
+        return dd, banner, False
+
+    return f"<dd>{when} &middot; in {remaining_h:.1f} h</dd>", "", False
 
 
 def _auth_page(notice: str = "") -> str:
@@ -367,17 +401,19 @@ def _auth_page(notice: str = "") -> str:
         </div>
         """
     else:
+        expiry_dd, expiry_banner, is_expired = _expiry_status(settings, token)
+        dot_cls = "dot bad" if is_expired else "dot"
+        heading = "Expired" if is_expired else "Authorised"
         panel = f"""
         <div class="auth">
-          <div class="auth-h"><h2>Authorised</h2></div>
+          <div class="auth-h"><span class="{dot_cls}"></span><h2>{heading}</h2></div>
           <div class="auth-b">
+            {expiry_banner}
             <dl class="meta">
               <div><dt>Token age</dt>
                    <dd>{token.age_seconds / 3600:.2f} h</dd></div>
-              <div><dt>Expiry signal</dt>
-                   <dd>Issue time only; Oscar returns no TTL</dd></div>
               <div><dt>Expires at</dt>
-                   {_expiry_dd(settings, token)}</div>
+                   {expiry_dd}</div>
               <div><dt>Stored at</dt>
                    <dd>{html.escape(str(settings.token_file))}</dd></div>
             </dl>

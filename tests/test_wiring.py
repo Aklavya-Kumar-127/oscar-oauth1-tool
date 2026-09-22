@@ -1,6 +1,9 @@
 """Non-network wiring checks: URL construction and token persistence."""
 
+import time
 from pathlib import Path
+
+import pytest
 
 from oscar_oauth1.client import OscarOAuth1Client
 from oscar_oauth1.config import Settings
@@ -45,3 +48,14 @@ def test_missing_and_corrupt_token_files_return_none(tmp_path):
     corrupt = tmp_path / "corrupt.json"
     corrupt.write_text("not json", encoding="utf-8")
     assert store.load(corrupt) is None
+
+
+def test_remaining_seconds_is_none_without_a_configured_ttl():
+    token = store.AccessToken("at", "as", time.time())
+    assert token.remaining_seconds(None) is None
+
+
+def test_remaining_seconds_reflects_a_configured_ttl():
+    token = store.AccessToken("at", "as", time.time() - 3600)
+    assert token.remaining_seconds(7200) == pytest.approx(3600, abs=1)
+    assert token.remaining_seconds(1800) < 0

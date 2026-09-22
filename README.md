@@ -131,6 +131,12 @@ That last point is structural. Any integration on this needs either a long TTL
 agreed with the EMR administrator or an operational plan for re-authorising.
 It cannot be solved in code.
 
+Set `OSCAR_TOKEN_TTL_SECONDS` (from the same admin screen) so `serve`'s UI and
+`status` can tell you *before* a 401 rather than after: both otherwise only
+know the token's age, not whether it has actually lapsed. Left unset, the
+"Authorised" badge stays green at any age — a stale token looks identical to
+a fresh one until Oscar rejects it.
+
 ## Observed on medozai-dev, 2026-09-15
 
 The brief predicts `401` + `WWW-Authenticate: OAuth` on the bare services path.
