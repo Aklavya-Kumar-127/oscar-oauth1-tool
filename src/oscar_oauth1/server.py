@@ -15,6 +15,8 @@ from __future__ import annotations
 import html
 import json
 import logging
+import time
+from datetime import datetime
 from typing import Optional
 
 from fastapi import FastAPI, Form, HTTPException, Query, Request
@@ -248,6 +250,7 @@ HEAD = """
   .meta dt { font-family: var(--mono); font-size: 0.68rem; color: var(--ink3);
              text-transform: uppercase; letter-spacing: 0.1em; }
   .meta dd { margin: 2px 0 0; color: var(--ink2); }
+  .meta dd.bad-text { color: var(--bad); }
 </style>
 """
 
@@ -297,6 +300,26 @@ def _shell(
     """
 
 
+def _expiry_dd(settings: Settings, token: AccessToken) -> str:
+    """The 'Expires at' row. Oscar never sends a TTL, so this is only ever as
+    good as OSCAR_TOKEN_TTL_SECONDS, entered by hand from the client's own
+    Administration Panel > Integration screen (see README § When it returns
+    401). Unset, there is nothing to compute from, and the row says so rather
+    than pretending an age is an expiry."""
+    if settings.token_ttl_seconds is None:
+        return (
+            '<dd>Unknown &mdash; set <code>OSCAR_TOKEN_TTL_SECONDS</code> '
+            "to compute one</dd>"
+        )
+
+    expires_at = token.issued_at + settings.token_ttl_seconds
+    remaining_h = (expires_at - time.time()) / 3600
+    when = datetime.fromtimestamp(expires_at).strftime("%Y-%m-%d %H:%M")
+    if remaining_h <= 0:
+        return f'<dd class="bad-text">{when} &middot; expired {abs(remaining_h):.1f} h ago</dd>'
+    return f'<dd>{when} &middot; in {remaining_h:.1f} h</dd>'
+
+
 def _auth_page(notice: str = "") -> str:
     """The landing page. Authorisation is the first thing anyone sees, because
     it is the first thing that has to happen. Every call to Oscar is signed
@@ -334,6 +357,8 @@ def _auth_page(notice: str = "") -> str:
                    <dd>{token.age_seconds / 3600:.2f} h</dd></div>
               <div><dt>Expiry signal</dt>
                    <dd>Issue time only; Oscar returns no TTL</dd></div>
+              <div><dt>Expires at</dt>
+                   {_expiry_dd(settings, token)}</div>
               <div><dt>Stored at</dt>
                    <dd>{html.escape(str(settings.token_file))}</dd></div>
             </dl>

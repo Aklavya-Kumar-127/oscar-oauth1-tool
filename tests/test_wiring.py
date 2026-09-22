@@ -15,6 +15,7 @@ def _settings(tmp_path: Path) -> Settings:
         consumer_secret="secret",
         callback_url="http://localhost:3000/oauth1/callback",
         token_file=tmp_path / "token.json",
+        token_ttl_seconds=None,
     )
 
 
