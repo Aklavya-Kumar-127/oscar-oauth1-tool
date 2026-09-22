@@ -260,6 +260,17 @@ def _token():
     return settings, store.load(settings.token_file)
 
 
+def _remaining_ttl_hours(settings: Settings, token: AccessToken) -> Optional[float]:
+    """Hours left before OSCAR_TOKEN_TTL_SECONDS lapses, or None when that is
+    unset and there is nothing to compute from. A negative result means the
+    token is past its configured TTL, even though this tool still holds it —
+    Oscar answers a 401 for it regardless of what the age display says."""
+    if settings.token_ttl_seconds is None:
+        return None
+    expires_at = token.issued_at + settings.token_ttl_seconds
+    return (expires_at - time.time()) / 3600
+
+
 _OPERATIONS_NAV = [
     ("/probe", "Probe base paths"),
     ("/api/specialist?specId=1", "Raw call"),
@@ -275,10 +286,18 @@ def _shell(
     """The page frame. Every page states the host and the token state, because
     both decide whether anything below can work."""
     if token:
-        pill = (
-            f'<span class="pill"><span class="dot"></span>'
-            f"Authorised &middot; {token.age_seconds / 3600:.1f} h</span>"
-        )
+        age_h = token.age_seconds / 3600
+        remaining_h = _remaining_ttl_hours(settings, token)
+        if remaining_h is not None and remaining_h <= 0:
+            pill = (
+                f'<span class="pill off"><span class="dot"></span>'
+                f"Expired &middot; {age_h:.1f} h old</span>"
+            )
+        else:
+            pill = (
+                f'<span class="pill"><span class="dot"></span>'
+                f"Authorised &middot; {age_h:.1f} h</span>"
+            )
     else:
         pill = '<span class="pill off"><span class="dot"></span>Not authorised</span>'
 
@@ -306,14 +325,14 @@ def _expiry_dd(settings: Settings, token: AccessToken) -> str:
     Administration Panel > Integration screen (see README § When it returns
     401). Unset, there is nothing to compute from, and the row says so rather
     than pretending an age is an expiry."""
-    if settings.token_ttl_seconds is None:
+    remaining_h = _remaining_ttl_hours(settings, token)
+    if remaining_h is None:
         return (
             '<dd>Unknown &mdash; set <code>OSCAR_TOKEN_TTL_SECONDS</code> '
             "to compute one</dd>"
         )
 
     expires_at = token.issued_at + settings.token_ttl_seconds
-    remaining_h = (expires_at - time.time()) / 3600
     when = datetime.fromtimestamp(expires_at).strftime("%Y-%m-%d %H:%M")
     if remaining_h <= 0:
         return f'<dd class="bad-text">{when} &middot; expired {abs(remaining_h):.1f} h ago</dd>'
