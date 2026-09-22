@@ -227,10 +227,11 @@ HEAD = """
   .auth-h h2 { margin: 0; font-size: 1.05rem; font-weight: 600; }
   .auth-h .dot { width: 9px; height: 9px; background: var(--ok); }
   .auth-h .dot.bad { background: var(--bad); }
-  .auth-b { padding: 20px 24px 24px; }
-  /* Prose stays at a readable measure even though the card itself now
-     spans the full page width. */
-  .auth-b p, .steps { max-width: 42rem; }
+  .auth-b { padding: 22px 24px 26px; }
+  /* Long-form prose stays at a readable measure even though the card
+     spans the full page width; .hint is a single short line and is
+     meant to run the width of the card instead of wrapping early. */
+  .auth-b p:not(.hint), .steps { max-width: 42rem; }
   .auth-b p { margin: 0 0 14px; }
   .steps { list-style: none; margin: 0 0 18px; padding: 0;
            counter-reset: step; }
@@ -250,13 +251,16 @@ HEAD = """
                box-shadow: inset 0 0 0 1px var(--rule2); }
   .cta.ghost:hover { box-shadow: inset 0 0 0 1px var(--accent);
                      background: transparent; }
-  .meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-          gap: 14px 24px; margin: 0 0 18px;
-          padding: 14px 0 0; border-top: 1px solid var(--rule); }
+  /* Columns grow up to 15rem and stop — on a wide card this keeps the
+     stats grouped and legible instead of stretching edge to edge with
+     the label and value pulled far apart. */
+  .meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 15rem));
+          justify-content: start; gap: 16px 32px; margin: 0 0 20px;
+          padding: 16px 0 0; border-top: 1px solid var(--rule); }
   .meta div { font-size: 0.8rem; min-width: 0; }
   .meta dt { font-family: var(--mono); font-size: 0.68rem; color: var(--ink3);
              text-transform: uppercase; letter-spacing: 0.1em; }
-  .meta dd { margin: 3px 0 0; color: var(--ink2); word-break: break-word; }
+  .meta dd { margin: 4px 0 0; color: var(--ink2); word-break: break-word; }
   .meta dd.bad-text { color: var(--bad); font-weight: 500; }
   .meta dd code { font-family: var(--mono); font-size: 0.78rem;
                   background: var(--raised); border: 1px solid var(--rule2);
@@ -264,11 +268,13 @@ HEAD = """
 
   /* ---- inline banner ---- */
   .banner { display: flex; align-items: flex-start; gap: 10px;
-            border-radius: 6px; padding: 11px 14px; margin: 0 0 18px;
-            font-size: 0.85rem; line-height: 1.5; }
+            border-radius: 6px; padding: 12px 16px; margin: 0 0 20px;
+            font-size: 0.85rem; line-height: 1.5; border-left: 3px solid; }
   .banner .dot { margin-top: 6px; flex: none; }
-  .banner.bad  { background: var(--bad-bg);  color: var(--bad); }
-  .banner.warn { background: var(--warn-bg); color: var(--warn); }
+  .banner.bad  { background: var(--bad-bg);  color: var(--bad);
+                 border-color: var(--bad); }
+  .banner.warn { background: var(--warn-bg); color: var(--warn);
+                 border-color: var(--warn); }
 </style>
 """
 
@@ -384,6 +390,7 @@ def _auth_page(notice: str = "") -> str:
 
     if token is None:
         panel = """
+        <p class="eyebrow">Authorisation</p>
         <div class="auth">
           <div class="auth-h"><h2>Authorisation required</h2></div>
           <div class="auth-b">
@@ -408,6 +415,7 @@ def _auth_page(notice: str = "") -> str:
         dot_cls = "dot bad" if is_expired else "dot"
         heading = "Expired" if is_expired else "Authorised"
         panel = f"""
+        <p class="eyebrow">Authorisation</p>
         <div class="auth">
           <div class="auth-h"><span class="{dot_cls}"></span><h2>{heading}</h2></div>
           <div class="auth-b">
