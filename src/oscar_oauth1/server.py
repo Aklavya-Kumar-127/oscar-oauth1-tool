@@ -218,7 +218,7 @@ HEAD = """
         font-family: var(--mono); font-size: 0.78rem; line-height: 1.55; }
 
   /* ---- auth landing ---- */
-  .auth { max-width: 44rem; background: var(--surface);
+  .auth { width: 100%; background: var(--surface);
           border: 1px solid var(--rule); border-radius: var(--r);
           overflow: hidden; }
   .auth-h { padding: 18px 24px; border-bottom: 1px solid var(--rule);
@@ -228,6 +228,9 @@ HEAD = """
   .auth-h .dot { width: 9px; height: 9px; background: var(--ok); }
   .auth-h .dot.bad { background: var(--bad); }
   .auth-b { padding: 20px 24px 24px; }
+  /* Prose stays at a readable measure even though the card itself now
+     spans the full page width. */
+  .auth-b p, .steps { max-width: 42rem; }
   .auth-b p { margin: 0 0 14px; }
   .steps { list-style: none; margin: 0 0 18px; padding: 0;
            counter-reset: step; }
